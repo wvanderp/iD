@@ -5,7 +5,8 @@
         "es6": true
     },
     "extends": [
-        "eslint:recommended"
+        "eslint:recommended",
+        "airbnb-base"
     ],
     "globals": {
         "d3": false
@@ -104,6 +105,8 @@
         "semi": ["error", "always"],
         "semi-spacing": "error",
         "space-unary-ops": "error",
-        "wrap-regex": "off"
+        "wrap-regex": "off",
+        "import/prefer-default-export": "off",
+        "no-underscore-dangle": "off"
     }
 }
