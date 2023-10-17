@@ -8,13 +8,12 @@ import { t, localizer } from '../../core/localizer';
 import { uiTooltip } from '../tooltip';
 import { svgIcon } from '../../svg/icon';
 import { geoExtent } from '../../geo';
-import { modeBrowse } from '../../modes/browse';
 import { uiCmd } from '../cmd';
 import { uiSection } from '../section';
 import { uiSettingsCustomData } from '../settings/custom_data';
+import { toggleLayer } from './map_data_helper';
 
 export function uiSectionDataLayers(context) {
-
     var settingsCustomData = uiSettingsCustomData(context)
         .on('change', customChanged);
 
@@ -40,33 +39,8 @@ export function uiSectionDataLayers(context) {
             .call(drawPanelItems);
     }
 
-    function showsLayer(which) {
-        var layer = layers.layer(which);
-        if (layer) {
-            return layer.enabled();
-        }
-        return false;
-    }
 
-    function setLayer(which, enabled) {
-        // Don't allow layer changes while drawing - #6584
-        var mode = context.mode();
-        if (mode && /^draw/.test(mode.id)) return;
-
-        var layer = layers.layer(which);
-        if (layer) {
-            layer.enabled(enabled);
-
-            if (!enabled && (which === 'osm' || which === 'notes')) {
-                context.enter(modeBrowse(context));
-            }
-        }
-    }
-
-    function toggleLayer(which) {
-        setLayer(which, !showsLayer(which));
-    }
-
+    // draw functions
     function drawOsmItems(selection) {
         var osmKeys = ['osm', 'notes'];
         var osmLayers = layers.all().filter(function(obj) { return osmKeys.indexOf(obj.id) !== -1; });
@@ -112,7 +86,7 @@ export function uiSectionDataLayers(context) {
         labelEnter
             .append('input')
             .attr('type', 'checkbox')
-            .on('change', function(d3_event, d) { toggleLayer(d.id); });
+            .on('change', (d3_event, d) => { toggleLayer(context, d.id); });
 
         labelEnter
             .append('span')
@@ -163,7 +137,7 @@ export function uiSectionDataLayers(context) {
         labelEnter
             .append('input')
             .attr('type', 'checkbox')
-            .on('change', function(d3_event, d) { toggleLayer(d.id); });
+            .on('change', (d3_event, d) => { toggleLayer(context, d.id); });
 
         labelEnter
             .append('span')
@@ -321,7 +295,7 @@ export function uiSectionDataLayers(context) {
         labelEnter
             .append('input')
             .attr('type', 'checkbox')
-            .on('change', function() { toggleLayer('data'); });
+            .on('change', () => { toggleLayer(context, 'data'); });
 
         labelEnter
             .append('span')

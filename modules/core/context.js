@@ -6,10 +6,8 @@ import { select as d3_select } from 'd3-selection';
 
 import packageJSON from '../../package.json';
 
-import { t } from '../core/localizer';
-
 import { fileFetcher } from './file_fetcher';
-import { localizer } from './localizer';
+import { localizer, t } from './localizer';
 import { coreHistory } from './history';
 import { coreValidator } from './validator';
 import { coreUploader } from './uploader';
@@ -20,7 +18,7 @@ import { rendererBackground, rendererFeatures, rendererMap, rendererPhotos } fro
 import { services } from '../services';
 import { uiInit } from '../ui/init';
 import { utilKeybinding, utilRebind, utilStringQs, utilCleanOsmString } from '../util';
-
+import { prefs } from './preferences';
 
 export function coreContext() {
   const dispatch = d3_dispatch('enter', 'exit', 'change');
@@ -183,10 +181,10 @@ export function coreContext() {
     context.loadEntity(entityID, (err, result) => {
       if (err) return;
       if (zoomTo !== false) {
-          const entity = result.data.find(e => e.id === entityID);
-          if (entity) {
-            _map.zoomTo(entity);
-          }
+        const entity = result.data.find(e => e.id === entityID);
+        if (entity) {
+          _map.zoomTo(entity);
+        }
       }
     });
 
@@ -234,7 +232,7 @@ export function coreContext() {
   };
 
   // Immediately save the user's history to localstorage, if possible
-  // This is called someteimes, but also on the `window.onbeforeunload` handler
+  // This is called sometimes, but also on the `window.onbeforeunload` handler
   context.save = () => {
     // no history save, no message onbeforeunload
     if (_inIntro || context.container().select('.modal').size()) return;
@@ -474,10 +472,8 @@ export function coreContext() {
   context.projection = geoRawMercator();
   context.curtainProjection = geoRawMercator();
 
-
   /* Init */
   context.init = () => {
-
     instantiateInternal();
 
     initializeDependents();
@@ -488,7 +484,6 @@ export function coreContext() {
     // until this is complete since load statuses are indeterminate. The order
     // of instantiation shouldn't matter.
     function instantiateInternal() {
-
       _history = coreHistory(context);
       context.graph = _history.graph;
       context.pauseChangeDispatch = _history.pauseChangeDispatch;
@@ -514,7 +509,6 @@ export function coreContext() {
     // Set up objects that might need to access properties of `context`. The order
     // might matter if dependents make calls to each other. Be wary of async calls.
     function initializeDependents() {
-
       if (context.initialHashParams.presets) {
         presetManager.addablePresetIDs(new Set(context.initialHashParams.presets.split(',')));
       }
@@ -528,7 +522,7 @@ export function coreContext() {
       presetManager.ensureLoaded();
       _background.ensureLoaded();
 
-      Object.values(services).forEach(service => {
+      Object.values(services).forEach((service) => {
         if (service && typeof service.init === 'function') {
           service.init();
         }
@@ -538,11 +532,24 @@ export function coreContext() {
       _validator.init();
       _features.init();
 
+      // enabling the data layers set in settings
+      const dataLayerPreference = JSON.parse(prefs.get('dataLayers') || '{}');
+      Object.entries(dataLayerPreference).forEach(([id, enabled]) => {
+           context.layers().layer(id).enabled(enabled);
+      });
+
+      // applying the photo filter settings
+      console.log(prefs.get('photoTypesFilter'));
+      const photoFilterPreference = JSON.parse(prefs.get('photoTypesFilter') || '{}');
+      Object.entries(photoFilterPreference).forEach(([id, enabled]) => {
+        context.photos().setPhotoType(id, enabled);
+      });
+
       if (services.maprules && context.initialHashParams.maprules) {
         d3_json(context.initialHashParams.maprules)
-          .then(mapcss => {
+          .then((mapcss) => {
             services.maprules.init();
-            mapcss.forEach(mapcssSelector => services.maprules.addRule(mapcssSelector));
+            mapcss.forEach((mapcssSelector) => services.maprules.addRule(mapcssSelector));
           })
           .catch(() => { /* ignore */ });
       }

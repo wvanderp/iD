@@ -107,6 +107,11 @@
         "space-unary-ops": "error",
         "wrap-regex": "off",
         "import/prefer-default-export": "off",
-        "no-underscore-dangle": "off"
+        "no-underscore-dangle": "off",
+        "camelcase": "off",
+        "prefer-template": "off",
+        "comma-dangle": "off",
+        "func-names": "off",
+        "import/no-extraneous-dependencies": "off"
     }
 }

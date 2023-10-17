@@ -7,57 +7,74 @@ import { uiSection } from '../section';
 import { utilGetSetValue, utilNoAuto } from '../../util';
 import { uiSettingsLocalPhotos } from '../settings/local_photos';
 import { svgIcon } from '../../svg';
+import { toggleLayer } from './map_data_helper';
+import { prefs as preferences } from '../../core/preferences';
+
+export function getPhotoLayers(context) {
+    const layers = context.layers();
+    const photoKeys = context.photos().overlayLayerIDs();
+    const photoLayers = layers.all().filter((layer) => photoKeys.indexOf(layer.id) !== -1);
+
+    return photoLayers;
+}
 
 export function uiSectionPhotoOverlays(context) {
+    const settingsLocalPhotos = uiSettingsLocalPhotos(context)
+        .on('change', localPhotosChanged);
 
-    var settingsLocalPhotos = uiSettingsLocalPhotos(context)
-        .on('change',  localPhotosChanged);
-
-    var layers = context.layers();
-
-    var section = uiSection('photo-overlays', context)
+    // photo overlays container
+    const section = uiSection('photo-overlays', context)
         .label(() => t.append('photo_overlays.title'))
         .disclosureContent(renderDisclosureContent)
         .expandedByDefault(false);
 
+    // render the content of the photo overlays container
     function renderDisclosureContent(selection) {
+        // apparently this captures the card part of the photo overlays container
         var container = selection.selectAll('.photo-overlay-container')
             .data([0]);
 
+        // add a div to the card and start drawing all the photo overlays
         container.enter()
             .append('div')
             .attr('class', 'photo-overlay-container')
             .merge(container)
-            .call(drawPhotoItems)
-            .call(drawPhotoTypeItems)
+            .call(drawPhotoSources)
+            .call(drawPhotoTypeFilter)
             .call(drawDateFilter)
             .call(drawUsernameFilter)
             .call(drawLocalPhotos);
     }
 
-    function drawPhotoItems(selection) {
-        var photoKeys = context.photos().overlayLayerIDs();
-        var photoLayers = layers.all().filter(function(obj) { return photoKeys.indexOf(obj.id) !== -1; });
-        var data = photoLayers.filter(function(obj) {
-            if (!obj.layer.supported()) return false;
-            if (layerEnabled(obj)) return true;
-            if (typeof obj.layer.validHere === 'function') {
-                return obj.layer.validHere(context.map().extent(), context.map().zoom());
+    // draw the photo layers selectors and filters
+
+    function drawPhotoSources(selection) {
+        // filter out all non-photo layers
+        const photoLayers = getPhotoLayers(context);
+        const availablePhotoLayers = photoLayers.filter((layerObj) => {
+            // is the service online
+            if (!layerObj.layer.supported()) return false;
+            // is the service enabled
+            if (isLayerEnabled(layerObj)) return true;
+            // is the service available at the current location and zoom level
+            if (typeof layerObj.layer.validHere === 'function') {
+                return layerObj.layer.validHere(context.map().extent(), context.map().zoom());
             }
             return true;
         });
 
-        function layerSupported(d) {
-            return d.layer && d.layer.supported();
+        // local helper functions
+        function isLayerSupported(layerObj) {
+            return layerObj.layer && layerObj.layer.supported();
         }
-        function layerEnabled(d) {
-            return layerSupported(d) && d.layer.enabled();
+        function isLayerEnabled(layerObj) {
+            return isLayerSupported(layerObj) && layerObj.layer.enabled();
         }
-        function layerRendered(d) {
-            return d.layer.rendered?.(context.map().zoom()) ?? true;
+        function isLayerRendered(layer) {
+            return layer.rendered?.(context.map().zoom()) ?? true;
         }
 
-        var ul = selection
+        let ul = selection
             .selectAll('.layer-list-photos')
             .data([0]);
 
@@ -66,13 +83,13 @@ export function uiSectionPhotoOverlays(context) {
             .attr('class', 'layer-list layer-list-photos')
             .merge(ul);
 
-        var li = ul.selectAll('.list-item-photos')
-            .data(data);
+        const li = ul.selectAll('.list-item-photos')
+            .data(availablePhotoLayers);
 
         li.exit()
             .remove();
 
-        var liEnter = li.enter()
+        const liEnter = li.enter()
             .append('li')
             .attr('class', function(d) {
                 var classes = 'list-item-photos list-item-' + d.id;
@@ -82,24 +99,29 @@ export function uiSectionPhotoOverlays(context) {
                 return classes;
             });
 
-        var labelEnter = liEnter
+        // create a label for each photo layer
+        function getTooltipText(layerID) {
+            if (layerID === 'mapillary-signs') return 'mapillary.signs.tooltip';
+            if (layerID === 'mapillary') return 'mapillary_images.tooltip';
+            if (layerID === 'kartaview') return 'kartaview_images.tooltip';
+            return layerID.replace(/-/g, '_') + '.tooltip';
+        }
+
+        const labelEnter = liEnter
             .append('label')
-            .each(function(d) {
-                var titleID;
-                if (d.id === 'mapillary-signs') titleID = 'mapillary.signs.tooltip';
-                else if (d.id === 'mapillary') titleID = 'mapillary_images.tooltip';
-                else if (d.id === 'kartaview') titleID = 'kartaview_images.tooltip';
-                else titleID = d.id.replace(/-/g, '_') + '.tooltip';
+            .each(function (d) {
+                const titleID = getTooltipText(d.id);
+
                 d3_select(this)
-                    .call(uiTooltip()
-                        .title(() => {
-                            if (!layerRendered(d)) {
-                                return t.append('street_side.minzoom_tooltip');
-                            } else {
+                    .call(
+                        uiTooltip()
+                            .title(() => {
+                                if (!isLayerRendered(d)) {
+                                    return t.append('street_side.minzoom_tooltip');
+                                }
                                 return t.append(titleID);
-                            }
-                        })
-                        .placement('top')
+                            })
+                            .placement('top')
                     );
             });
 
@@ -119,18 +141,15 @@ export function uiSectionPhotoOverlays(context) {
         // Update
         li
             .merge(liEnter)
-            .classed('active', layerEnabled)
+            .classed('active', isLayerEnabled)
             .selectAll('input')
-            .property('disabled', d => !layerRendered(d))
-            .property('checked', layerEnabled);
+            .property('disabled', (d) => !isLayerRendered(d))
+            .property('checked', isLayerEnabled);
     }
 
-    function drawPhotoTypeItems(selection) {
-        var data = context.photos().allPhotoTypes();
-
-        function typeEnabled(d) {
-            return context.photos().showsPhotoType(d);
-        }
+    // select what photos you want to see. flat or 360
+    function drawPhotoTypeFilter(selection) {
+        const data = context.photos().allPhotoTypes();
 
         var ul = selection
             .selectAll('.layer-list-photo-types')
@@ -156,31 +175,39 @@ export function uiSectionPhotoOverlays(context) {
                 return 'list-item-photo-types list-item-' + d;
             });
 
-        var labelEnter = liEnter
+        const labelEnter = liEnter
             .append('label')
-            .each(function(d) {
+            .each(function (d) {
                 d3_select(this)
-                    .call(uiTooltip()
-                        .title(() => t.append('photo_overlays.photo_type.' + d + '.tooltip'))
-                        .placement('top')
+                    .call(
+                        uiTooltip()
+                            .title(() => t.append('photo_overlays.photo_type.' + d + '.tooltip'))
+                            .placement('top')
                     );
             });
+
+        function setPhotoTypePreference(d3_event, d) {
+            context.photos().togglePhotoType(d);
+
+            const photoTypePreference = JSON.parse(preferences.get('photoTypesFilter') || '{}');
+            photoTypePreference[d] = context.photos().showsPhotoType(d);
+            preferences.set('photoTypesFilter', JSON.stringify(photoTypePreference));
+        }
 
         labelEnter
             .append('input')
             .attr('type', 'checkbox')
-            .on('change', function(d3_event, d) {
-                context.photos().togglePhotoType(d);
-            });
+            .on('change', setPhotoTypePreference);
 
         labelEnter
             .append('span')
-            .html(function(d) {
-                return t.html('photo_overlays.photo_type.' + d + '.title');
-            });
-
+            .html((d) => t.html('photo_overlays.photo_type.' + d + '.title'));
 
         // Update
+        function typeEnabled(type) {
+            return context.photos().showsPhotoType(type);
+        }
+
         li
             .merge(liEnter)
             .classed('active', typeEnabled)
@@ -188,12 +215,9 @@ export function uiSectionPhotoOverlays(context) {
             .property('checked', typeEnabled);
     }
 
+    // select what date range you want to see photos from
     function drawDateFilter(selection) {
         var data = context.photos().dateFilters();
-
-        function filterEnabled(d) {
-            return context.photos().dateFilterValue(d);
-        }
 
         var ul = selection
             .selectAll('.layer-list-date-filter')
@@ -242,25 +266,28 @@ export function uiSectionPhotoOverlays(context) {
             .each(function(d) {
                 utilGetSetValue(d3_select(this), context.photos().dateFilterValue(d) || '');
             })
-            .on('change', function(d3_event, d) {
-                var value = utilGetSetValue(d3_select(this)).trim();
+            .on('change', function (d3_event, d) {
+                const value = utilGetSetValue(d3_select(this)).trim();
                 context.photos().setDateFilter(d, value, true);
                 // reload the displayed dates
                 li.selectAll('input')
-                    .each(function(d) {
+                    .each(function (d) {
                         utilGetSetValue(d3_select(this), context.photos().dateFilterValue(d) || '');
                     });
             });
+
+        // Update
+        function filterEnabled(date) {
+            return context.photos().dateFilterValue(date);
+        }
 
         li = li
             .merge(liEnter)
             .classed('active', filterEnabled);
     }
 
+    // select what usernames you want to see photos from
     function drawUsernameFilter(selection) {
-        function filterEnabled() {
-            return context.photos().usernames();
-        }
         var ul = selection
             .selectAll('.layer-list-username-filter')
             .data([0]);
@@ -297,6 +324,12 @@ export function uiSectionPhotoOverlays(context) {
             .append('span')
             .call(t.append('photo_overlays.username_filter.title'));
 
+        function usernameValue() {
+            const usernames = context.photos().usernames();
+            if (usernames) return usernames.join('; ');
+            return usernames;
+        }
+
         labelEnter
             .append('input')
             .attr('type', 'text')
@@ -309,40 +342,23 @@ export function uiSectionPhotoOverlays(context) {
                 d3_select(this).property('value', usernameValue);
             });
 
+        // Update
+        function filterEnabled() {
+            return context.photos().usernames();
+        }
+
         li
             .merge(liEnter)
             .classed('active', filterEnabled);
-
-        function usernameValue() {
-            var usernames = context.photos().usernames();
-            if (usernames) return usernames.join('; ');
-            return usernames;
-        }
     }
 
-    function toggleLayer(which) {
-        setLayer(which, !showsLayer(which));
-    }
 
-    function showsLayer(which) {
-        var layer = layers.layer(which);
-        if (layer) {
-            return layer.enabled();
-        }
-        return false;
-    }
 
-    function setLayer(which, enabled) {
-        var layer = layers.layer(which);
-        if (layer) {
-            layer.enabled(enabled);
-        }
-    }
-
+    // draw the local photos layer
     function drawLocalPhotos(selection) {
-        var photoLayer = layers.layer('local-photos');
-        var hasData = photoLayer && photoLayer.hasData();
-        var showsData = hasData && photoLayer.enabled();
+        const photoLayer = context.layers().layer('local-photos');
+        const hasData = photoLayer && photoLayer.hasData();
+        const showsData = hasData && photoLayer.enabled();
 
         var ul = selection
             .selectAll('.layer-list-local-photos')
@@ -424,17 +440,18 @@ export function uiSectionPhotoOverlays(context) {
     }
 
     function localPhotosChanged(d) {
-        var localPhotosLayer = layers.layer('local-photos');
-
+        const localPhotosLayer = context.layers().layer('local-photos');
         localPhotosLayer.fileList(d);
     }
+
+    // lifecycle
 
     context.layers().on('change.uiSectionPhotoOverlays', section.reRender);
     context.photos().on('change.uiSectionPhotoOverlays', section.reRender);
 
-    context.map()
-        .on('move.photo_overlays',
-            _debounce(function() {
+    context.map().on(
+            'move.photo_overlays',
+            _debounce(() => {
                 // layers in-view may have changed due to map move
                 window.requestIdleCallback(section.reRender);
             }, 1000)

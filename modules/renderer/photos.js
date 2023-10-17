@@ -145,26 +145,44 @@ export function rendererPhotos(context) {
         return photos.showsPhotoType('panoramic');
     };
 
-    photos.fromDate = function() {
+    photos.fromDate = function () {
         return _fromDate;
     };
 
-    photos.toDate = function() {
+    photos.toDate = function () {
         return _toDate;
     };
 
-    photos.togglePhotoType = function(val) {
-        var index = _shownPhotoTypes.indexOf(val);
+    photos.togglePhotoType = function(imageType) {
+        const index = _shownPhotoTypes.indexOf(imageType);
         if (index !== -1) {
-            _shownPhotoTypes.splice(index, 1);
+            photos.setPhotoType(imageType, false);
         } else {
-            _shownPhotoTypes.push(val);
+            photos.setPhotoType(imageType, true);
         }
         dispatch.call('change', this);
         return photos;
     };
 
-    photos.usernames = function() {
+    /**
+     * sets the photo type to be shown or not
+     * 
+     * @param {"flat" | "panoramic"} imageType the type of photo to set
+     * @param {boolean} shown whether or not to show the photo type
+     * @returns {this} this
+     */
+    photos.setPhotoType = function (imageType, shown) {
+        const index = _shownPhotoTypes.indexOf(imageType);
+        if (shown && index === -1) {
+            _shownPhotoTypes.push(imageType);
+        } else if (!shown && index !== -1) {
+            _shownPhotoTypes.splice(index, 1);
+        }
+        dispatch.call('change', this);
+        return photos;
+    };
+
+    photos.usernames = function () {
         return _usernames;
     };
 
