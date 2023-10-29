@@ -5,10 +5,12 @@
         "es6": true
     },
     "extends": [
-        "eslint:recommended"
+        "eslint:recommended",
+        "plugin:cypress/recommended"
     ],
     "globals": {
-        "d3": false
+        "d3": false,
+        "cy": false
     },
     "parserOptions": {
         "ecmaVersion": "latest",

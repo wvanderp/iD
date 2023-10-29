@@ -28,6 +28,11 @@ export function geoRawMercator() {
     }
 
 
+    /**
+     * 
+     * @param {[number, number]} point the point to invert
+     * @returns {[number, number]} the inverted point
+     */
     projection.invert = function(point) {
         point = project.invert((point[0] - x) / k, (y - point[1]) / k);
         return point && [point[0] * 180 / Math.PI, point[1] * 180 / Math.PI];

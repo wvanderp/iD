@@ -721,7 +721,11 @@ export function rendererMap(context) {
     };
 
 
-    // returns Lng/Lat
+    /**
+    * Returns the current mouse position projected to the map surface.
+    * If the mouse is not currently within the map surface, the center of the viewport is used instead.
+    * @returns {[number, number]} the projected mouse coordinates
+    */
     map.mouseCoordinates = function() {
         var coord = map.mouse() || pxCenter();
         return projection.invert(coord);
@@ -788,6 +792,13 @@ export function rendererMap(context) {
     }
 
 
+    /**
+     * moves the map a given delta in pixels and optionally animates the transition
+     *
+     * @param {[number, number]} delta the delta to move the map by in pixels
+     * @param {number} [duration] the duration of the transition in ms
+     * @returns {map} the map object
+     */
     map.pan = function(delta, duration) {
         var t = projection.translate();
         var k = projection.scale();
